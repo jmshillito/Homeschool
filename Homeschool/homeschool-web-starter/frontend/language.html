@@ -12,21 +12,23 @@
     textarea { min-height: 90px; }
     .question { border: 1px solid #eee; border-radius: 8px; padding: 10px; margin: 10px 0; }
     .muted { color: #666; }
+    .small { font-size: 0.92rem; }
     pre { white-space: pre-wrap; }
-    .tts-controls {
+    .tts-controls, .assist-controls {
       display: flex;
       gap: 8px;
       flex-wrap: wrap;
       align-items: center;
       margin-bottom: 12px;
     }
-    .tts-controls label {
+    .tts-controls label, .assist-controls label {
       width: auto;
       margin: 0;
       font-weight: bold;
     }
     .tts-controls select,
-    .tts-controls button {
+    .tts-controls button,
+    .assist-controls button {
       width: auto;
       min-width: 120px;
       margin: 0;
@@ -38,10 +40,18 @@
       border-radius: 8px;
       background: #fafafa;
     }
+    .soft-box {
+      background: #fafafa;
+      border: 1px solid #eee;
+      border-radius: 8px;
+      padding: 10px;
+      margin-top: 10px;
+    }
     @media (max-width: 800px) {
       .grid { grid-template-columns: 1fr; }
       .tts-controls select,
-      .tts-controls button {
+      .tts-controls button,
+      .assist-controls button {
         width: 100%;
       }
     }
@@ -54,13 +64,20 @@
 
   <div class="card">
     <h2>Reading baseline diagnostic</h2>
-    <p class="muted">This keeps the language area structured for growth: generate the exercise, record what happened, then analyze for baseline bands and support ideas.</p>
+    <p class="muted">Generate the exercise, collect the child’s answers, then auto-fill the evidence boxes to reduce manual copying.</p>
     <button id="generate-btn">Generate reading exercise</button>
     <div id="generated-pack"></div>
   </div>
 
   <div class="card">
     <h2>Record evidence for analysis</h2>
+
+    <div class="assist-controls">
+      <button type="button" id="autofill-evidence-btn">Autofill evidence from child answers</button>
+      <button type="button" id="clear-evidence-btn">Clear evidence boxes</button>
+    </div>
+    <p class="muted small">Autofill uses the child’s typed answers to prefill listening retell, written response, and extra notes. You can still edit anything before analysis.</p>
+
     <div class="grid">
       <div>
         <label>Listening retell</label>
@@ -111,6 +128,7 @@
     const learnerId = params.get('id');
     let learner = null;
     let currentPack = null;
+    let currentUtterance = null;
 
     async function loadLearner() {
       const res = await fetch(`/api/learners/${learnerId}`);
@@ -157,18 +175,95 @@
         <h4>Administration notes</h4>
         <ul>${currentPack.administration_notes.map(n => `<li>${n}</li>`).join('')}</ul>
         <h4>Questions</h4>
-        ${questionsHtml}`;
+        ${questionsHtml}
+
+        <div class="soft-box small">
+          <strong>Tip:</strong> After the child answers the questions above, click <em>Autofill evidence from child answers</em> to prefill the evidence boxes.
+        </div>`;
+    }
+
+    function getQuestionResponses() {
+      return Array.from(document.querySelectorAll('#generated-pack textarea')).map(el => ({
+        question_type: el.dataset.qtype,
+        question: el.dataset.question,
+        child_response: el.value.trim()
+      }));
+    }
+
+    function autofillEvidenceFromAnswers() {
+      const responses = getQuestionResponses().filter(r => r.child_response);
+      if (!responses.length) {
+        alert('Enter at least one child answer first.');
+        return;
+      }
+
+      const summaryResponse =
+        responses.find(r => r.question_type === 'summary')?.child_response || '';
+      const literalResponses =
+        responses.filter(r => r.question_type === 'literal').map(r => r.child_response).filter(Boolean);
+      const inferenceResponses =
+        responses.filter(r => r.question_type === 'inference').map(r => r.child_response).filter(Boolean);
+      const vocabularyResponses =
+        responses.filter(r => r.question_type === 'vocabulary').map(r => r.child_response).filter(Boolean);
+
+      const allResponsesText = responses.map((r, idx) =>
+        `Q${idx + 1} (${r.question_type})\nQuestion: ${r.question}\nChild answer: ${r.child_response}`
+      ).join('\n\n');
+
+      const listeningRetellBox = document.getElementById('listening-retell');
+      const writtenResponseBox = document.getElementById('written-response');
+      const extraNotesBox = document.getElementById('extra-notes');
+
+      if (!listeningRetellBox.value.trim()) {
+        listeningRetellBox.value =
+          summaryResponse ||
+          literalResponses.slice(0, 2).join(' ') ||
+          responses[0].child_response;
+      }
+
+      if (!writtenResponseBox.value.trim()) {
+        writtenResponseBox.value =
+          summaryResponse ||
+          responses.map(r => r.child_response).join(' ').slice(0, 500);
+      }
+
+      const autoNotes = [];
+      autoNotes.push('Autofilled from child answers.');
+      if (literalResponses.length) autoNotes.push(`Literal answers captured: ${literalResponses.length}.`);
+      if (vocabularyResponses.length) autoNotes.push(`Vocabulary answers captured: ${vocabularyResponses.length}.`);
+      if (inferenceResponses.length) autoNotes.push(`Inference answers captured: ${inferenceResponses.length}.`);
+      autoNotes.push('');
+      autoNotes.push(allResponsesText);
+
+      extraNotesBox.value = extraNotesBox.value.trim()
+        ? `${extraNotesBox.value.trim()}\n\n${autoNotes.join('\n')}`
+        : autoNotes.join('\n');
+    }
+
+    function clearEvidenceBoxes() {
+      [
+        'listening-retell',
+        'listening-notes',
+        'accuracy-notes',
+        'fluency-notes',
+        'self-correction-notes',
+        'observed-errors',
+        'written-response',
+        'attention-notes',
+        'frustration-notes',
+        'confidence-notes',
+        'extra-notes'
+      ].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+      });
     }
 
     async function analyze() {
       if (!currentPack) {
         await generatePack();
       }
-      const questionResponses = Array.from(document.querySelectorAll('#generated-pack textarea')).map(el => ({
-        question_type: el.dataset.qtype,
-        question: el.dataset.question,
-        child_response: el.value
-      }));
+      const questionResponses = getQuestionResponses();
       const payload = {
         learner_id: learner.id,
         age: learner.age,
@@ -199,75 +294,66 @@
     function readPassage() {
       const passageEl = document.getElementById('reading-passage');
       const speedEl = document.getElementById('tts-speed');
+      const pauseBtn = document.getElementById('pause-btn');
 
       if (!passageEl) return;
 
       const text = passageEl.innerText.trim();
       if (!text) return;
 
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = Number(speedEl?.value || 0.9);
-      utterance.pitch = 1;
-      utterance.volume = 1;
-
       speechSynthesis.cancel();
-      speechSynthesis.speak(utterance);
+
+      currentUtterance = new SpeechSynthesisUtterance(text);
+      currentUtterance.rate = Number(speedEl?.value || 0.9);
+      currentUtterance.pitch = 1;
+      currentUtterance.volume = 1;
+
+      currentUtterance.onend = () => {
+        if (pauseBtn) pauseBtn.textContent = '⏸ Pause';
+        currentUtterance = null;
+      };
+
+      currentUtterance.onerror = () => {
+        if (pauseBtn) pauseBtn.textContent = '⏸ Pause';
+        currentUtterance = null;
+      };
+
+      speechSynthesis.speak(currentUtterance);
+
+      if (pauseBtn) pauseBtn.textContent = '⏸ Pause';
     }
 
-let currentUtterance = null;
-let isPaused = false;
+    function togglePauseReading() {
+      const pauseBtn = document.getElementById('pause-btn');
 
-function readPassage() {
-  const passageEl = document.getElementById('reading-passage');
-  const speedEl = document.getElementById('tts-speed');
-  const pauseBtn = document.getElementById('pause-btn');
+      if (speechSynthesis.speaking && !speechSynthesis.paused) {
+        speechSynthesis.pause();
+        if (pauseBtn) pauseBtn.textContent = '▶ Resume';
+        return;
+      }
 
-  if (!passageEl) return;
+      if (speechSynthesis.paused) {
+        speechSynthesis.resume();
+        setTimeout(() => {
+          if (pauseBtn && speechSynthesis.speaking && !speechSynthesis.paused) {
+            pauseBtn.textContent = '⏸ Pause';
+          }
+        }, 100);
+        return;
+      }
 
-  const text = passageEl.innerText.trim();
-  if (!text) return;
+      readPassage();
+    }
 
-  speechSynthesis.cancel();
-  isPaused = false;
-
-  currentUtterance = new SpeechSynthesisUtterance(text);
-  currentUtterance.rate = Number(speedEl?.value || 0.9);
-  currentUtterance.pitch = 1;
-  currentUtterance.volume = 1;
-
-  currentUtterance.onend = () => {
-    isPaused = false;
-    if (pauseBtn) pauseBtn.textContent = '⏸ Pause';
-  };
-
-  speechSynthesis.speak(currentUtterance);
-
-  if (pauseBtn) pauseBtn.textContent = '⏸ Pause';
-}
-
-function togglePauseReading() {
-  const pauseBtn = document.getElementById('pause-btn');
-
-  if (speechSynthesis.speaking && !speechSynthesis.paused) {
-    speechSynthesis.pause();
-    isPaused = true;
-    if (pauseBtn) pauseBtn.textContent = '▶ Resume';
-    return;
-  }
-
-  if (speechSynthesis.paused) {
-    speechSynthesis.resume();
-    isPaused = false;
-    if (pauseBtn) pauseBtn.textContent = '⏸ Pause';
-  }
-}
-
-window.addEventListener('beforeunload', () => {
-  speechSynthesis.cancel();
-});
+    window.addEventListener('beforeunload', () => {
+      speechSynthesis.cancel();
+    });
 
     document.getElementById('generate-btn').addEventListener('click', generatePack);
     document.getElementById('analyze-btn').addEventListener('click', analyze);
+    document.getElementById('autofill-evidence-btn').addEventListener('click', autofillEvidenceFromAnswers);
+    document.getElementById('clear-evidence-btn').addEventListener('click', clearEvidenceBoxes);
+
     loadLearner();
   </script>
 </body>

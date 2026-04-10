@@ -1,0 +1,57 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+from uuid import uuid4
+
+BASE_DIR = Path(__file__).resolve().parents[2]
+DATA_DIR = BASE_DIR / "data"
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+FILES = {
+    "learners": DATA_DIR / "learners.json",
+    "baselines": DATA_DIR / "baselines.json",
+    "goals": DATA_DIR / "goals.json",
+    "progress": DATA_DIR / "progress.json",
+}
+
+
+def _read(path: Path) -> List[Dict[str, Any]]:
+    if not path.exists():
+        return []
+    return json.loads(path.read_text())
+
+
+def _write(path: Path, rows: List[Dict[str, Any]]) -> None:
+    path.write_text(json.dumps(rows, indent=2))
+
+
+def list_rows(kind: str) -> List[Dict[str, Any]]:
+    return _read(FILES[kind])
+
+
+def get_row(kind: str, row_id: str) -> Optional[Dict[str, Any]]:
+    for row in _read(FILES[kind]):
+        if row.get("id") == row_id:
+            return row
+    return None
+
+
+def add_row(kind: str, row: Dict[str, Any]) -> Dict[str, Any]:
+    rows = _read(FILES[kind])
+    row = {"id": str(uuid4()), **row}
+    rows.append(row)
+    _write(FILES[kind], rows)
+    return row
+
+
+def update_row(kind: str, row_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    rows = _read(FILES[kind])
+    for index, row in enumerate(rows):
+        if row.get("id") == row_id:
+            merged = {**row, **updates, "id": row_id}
+            rows[index] = merged
+            _write(FILES[kind], rows)
+            return merged
+    return None

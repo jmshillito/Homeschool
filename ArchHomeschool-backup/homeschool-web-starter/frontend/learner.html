@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Learner Hub</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 1100px; margin: 0 auto; padding: 24px; line-height: 1.4; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; margin: 16px 0; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+    .tile { border: 1px solid #ccc; border-radius: 12px; padding: 16px; text-decoration: none; color: #111; background: #fafafa; }
+    .tile.disabled { color: #666; background: #f5f5f5; }
+    .muted { color: #666; }
+  </style>
+</head>
+<body>
+  <p><a href="/">← Back to learners</a></p>
+  <h1 id="title">Learner hub</h1>
+  <div class="card" id="profile-card">Loading learner profile...</div>
+<div class="card">
+  <h2>Preferred learning vehicles</h2>
+  <p>Select the interests or subject vehicles that help this learner engage best.</p>
+
+  <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
+    <select id="vehicle-select">
+      <option value="">Choose a vehicle...</option>
+      <option>Art</option>
+      <option>IT</option>
+      <option>Geography</option>
+      <option>History</option>
+      <option>Music</option>
+      <option>Nature</option>
+      <option>Cooking</option>
+      <option>Building</option>
+      <option>Storytelling</option>
+      <option>Games</option>
+      <option>Sport</option>
+      <option>Drama</option>
+    </select>
+    <button id="add-vehicle-btn" type="button">Add</button>
+  </div>
+
+  <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
+    <input id="custom-vehicle-input" placeholder="Add custom vehicle" />
+    <button id="add-custom-vehicle-btn" type="button">Add custom</button>
+  </div>
+
+  <div id="vehicle-tags"></div>
+</div>
+
+  <div class="card">
+    <h2>Subjects and pathways</h2>
+    <div class="grid">
+      <a class="tile" id="language-link" href="#">
+        <h3>Language</h3>
+        <p>Open diagnostics, baseline checks, and reading analysis.</p>
+      </a>
+      <div class="tile disabled">
+        <h3>Maths</h3>
+        <p>Reserved for number sense, operations, word problems, and later diagnostic flows.</p>
+      </div>
+      <div class="tile disabled">
+        <h3>Science</h3>
+        <p>Reserved for observation, prediction, explanation, and inquiry habits.</p>
+      </div>
+      <div class="tile disabled">
+        <h3>Cross-curricular vehicles</h3>
+        <p>Art, IT, Geography, History, Music, and project work will sit here later.</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const learnerId = params.get('id');
+
+    async function loadLearner() {
+      const res = await fetch(`/api/learners/${learnerId}`);
+      if (!res.ok) {
+        document.getElementById('profile-card').innerHTML = 'Learner not found.';
+        return;
+      }
+      const learner = await res.json();
+      document.getElementById('title').textContent = `${learner.display_name} · Learner hub`;
+      document.getElementById('profile-card').innerHTML = `
+        <strong>ID:</strong> ${learner.id}<br>
+        <strong>Name:</strong> ${learner.display_name}<br>
+        <strong>Age:</strong> ${learner.age}<br>
+        <strong>Country:</strong> ${learner.country}<br>
+        <strong>Preferred vehicles:</strong> ${(learner.preferred_vehicles || []).join(', ')}`;
+      document.getElementById('language-link').href = `/language.html?id=${learner.id}`;
+    }
+
+    loadLearner();
+  </script>
+</body>
+</html>

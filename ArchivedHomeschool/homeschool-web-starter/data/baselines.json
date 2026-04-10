@@ -1,0 +1,14 @@
+[
+  {
+    "id": "837007b8-57a7-4ec5-add3-7d4d22d2b4e0",
+    "learner_id": "7b6b1bc7-08c5-42fa-85b1-3f3eba5cdd94",
+    "domain": "language",
+    "subskill": "string",
+    "raw_evidence": "string",
+    "band": "string",
+    "confidence": "string",
+    "primary_barrier": "",
+    "next_step": "",
+    "vehicle_subject": ""
+  }
+]

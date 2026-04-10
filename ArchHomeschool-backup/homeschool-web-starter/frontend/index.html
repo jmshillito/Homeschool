@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Homeschool Web Starter</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 1100px; margin: 0 auto; padding: 24px; line-height: 1.4; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; margin: 16px 0; }
+    input, button { padding: 8px; margin: 4px 0; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; vertical-align: top; }
+    .muted { color: #666; }
+    a.button { display: inline-block; padding: 6px 10px; border: 1px solid #999; border-radius: 8px; text-decoration: none; color: #111; }
+  </style>
+</head>
+<body>
+  <h1>Homeschool Web Starter</h1>
+  <p class="muted">Create a learner, then open the learner hub to access Language, Maths, Science, and future subject areas.</p>
+
+  <div class="card">
+    <h2>Create learner</h2>
+    <form id="learner-form">
+      <div><input name="display_name" placeholder="Learner name" value="Learner"></div>
+      <div><input name="age" type="number" placeholder="Age" value="10"></div>
+      <div><input name="country" placeholder="Country" value="Australia"></div>
+      <button type="submit">Save learner</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Learners</h2>
+    <table id="learners-table">
+      <thead><tr><th>ID</th><th>Name</th><th>Age</th><th>Country</th><th>Open</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <script>
+    async function loadLearners() {
+      const res = await fetch('/api/learners');
+      const rows = await res.json();
+      const tbody = document.querySelector('#learners-table tbody');
+      tbody.innerHTML = '';
+      rows.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${row.id ?? ''}</td>
+          <td>${row.display_name}</td>
+          <td>${row.age}</td>
+          <td>${row.country}</td>
+          <td><a class="button" href="/learner.html?id=${row.id}">Open learner</a></td>`;
+        tbody.appendChild(tr);
+      });
+    }
+
+    document.getElementById('learner-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const form = new FormData(e.target);
+      const payload = {
+        display_name: form.get('display_name'),
+        age: Number(form.get('age')),
+        country: form.get('country'),
+        priorities: [],
+        observed_concerns: [],
+        strengths_interests: [],
+        preferred_vehicles: []
+      };
+      await fetch('/api/learners', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      e.target.reset();
+      loadLearners();
+    });
+
+    loadLearners();
+  </script>
+</body>
+</html>

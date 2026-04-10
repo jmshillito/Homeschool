@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Language Diagnostics</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 1100px; margin: 0 auto; padding: 24px; line-height: 1.4; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; margin: 16px 0; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    textarea, input, button, select { width: 100%; padding: 8px; margin: 6px 0; box-sizing: border-box; }
+    textarea { min-height: 90px; }
+    .question { border: 1px solid #eee; border-radius: 8px; padding: 10px; margin: 10px 0; }
+    .muted { color: #666; }
+    pre { white-space: pre-wrap; }
+    .tts-controls {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .tts-controls label {
+      width: auto;
+      margin: 0;
+      font-weight: bold;
+    }
+    .tts-controls select,
+    .tts-controls button {
+      width: auto;
+      min-width: 120px;
+      margin: 0;
+    }
+    #reading-passage {
+      margin-bottom: 16px;
+      padding: 12px;
+      border: 1px solid #eee;
+      border-radius: 8px;
+      background: #fafafa;
+    }
+    @media (max-width: 800px) {
+      .grid { grid-template-columns: 1fr; }
+      .tts-controls select,
+      .tts-controls button {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <p><a id="back-link" href="#">← Back to learner hub</a></p>
+  <h1>Language diagnostics</h1>
+  <div class="card" id="learner-card">Loading learner...</div>
+
+  <div class="card">
+    <h2>Reading baseline diagnostic</h2>
+    <p class="muted">This keeps the language area structured for growth: generate the exercise, record what happened, then analyze for baseline bands and support ideas.</p>
+    <button id="generate-btn">Generate reading exercise</button>
+    <div id="generated-pack"></div>
+  </div>
+
+  <div class="card">
+    <h2>Record evidence for analysis</h2>
+    <div class="grid">
+      <div>
+        <label>Listening retell</label>
+        <textarea id="listening-retell" placeholder="What did the child say after hearing the passage?"></textarea>
+
+        <label>Listening notes</label>
+        <textarea id="listening-notes" placeholder="How well did the child understand when the passage was read aloud?"></textarea>
+
+        <label>Read-aloud accuracy notes</label>
+        <textarea id="accuracy-notes" placeholder="Word substitutions, skipped endings, hesitations, decoding errors..."></textarea>
+
+        <label>Read-aloud fluency notes</label>
+        <textarea id="fluency-notes" placeholder="Slow, word-by-word, smooth, expressive, frequent pauses..."></textarea>
+
+        <label>Self-correction notes</label>
+        <textarea id="self-correction-notes" placeholder="Did the child notice and fix mistakes?"></textarea>
+
+        <label>Observed errors (one per line)</label>
+        <textarea id="observed-errors" placeholder="read carefully as careful&#10;skipped toward"></textarea>
+      </div>
+      <div>
+        <label>Written response</label>
+        <textarea id="written-response" placeholder="2 to 3 sentence written response from the learner"></textarea>
+
+        <label>Parent attention notes</label>
+        <textarea id="attention-notes" placeholder="Needed reminders, skipped lines, impulsive answers..."></textarea>
+
+        <label>Parent frustration notes</label>
+        <textarea id="frustration-notes" placeholder="Frustration, avoidance, emotional response..."></textarea>
+
+        <label>Parent confidence notes</label>
+        <textarea id="confidence-notes" placeholder="Confidence or reluctance during the task"></textarea>
+
+        <label>Extra notes</label>
+        <textarea id="extra-notes" placeholder="Anything else that seems important"></textarea>
+      </div>
+    </div>
+    <button id="analyze-btn">Analyze reading baseline</button>
+  </div>
+
+  <div class="card">
+    <h2>Analysis output</h2>
+    <pre id="analysis-output">No analysis yet.</pre>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const learnerId = params.get('id');
+    let learner = null;
+    let currentPack = null;
+
+    async function loadLearner() {
+      const res = await fetch(`/api/learners/${learnerId}`);
+      learner = await res.json();
+      document.getElementById('learner-card').innerHTML = `
+        <strong>Name:</strong> ${learner.display_name}<br>
+        <strong>Age:</strong> ${learner.age}<br>
+        <strong>Country:</strong> ${learner.country}<br>
+        <strong>ID:</strong> ${learner.id}`;
+      document.getElementById('back-link').href = `/learner.html?id=${learner.id}`;
+    }
+
+    async function generatePack() {
+      const res = await fetch('/api/language/reading-baseline/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ learner_id: learner.id, age: learner.age, country: learner.country })
+      });
+      currentPack = await res.json();
+      const questionsHtml = currentPack.questions.map((q, idx) => `
+        <div class="question">
+          <strong>Q${idx + 1} · ${q.question_type}</strong><br>
+          ${q.question}<br>
+          <textarea data-qtype="${q.question_type}" data-question="${q.question}" placeholder="Enter the child's answer here"></textarea>
+        </div>`).join('');
+      document.getElementById('generated-pack').innerHTML = `
+        <h3>${currentPack.passage_title}</h3>
+
+        <div class="tts-controls">
+          <label for="tts-speed">Read speed:</label>
+          <select id="tts-speed">
+            <option value="0.7">Slow</option>
+            <option value="0.9" selected>Medium</option>
+            <option value="1.0">Normal</option>
+            <option value="1.15">Fast</option>
+          </select>
+
+          <button type="button" onclick="readPassage()">🔊 Read aloud</button>
+          <button type="button" id="pause-btn" onclick="togglePauseReading()">⏸ Pause</button>
+        </div>
+
+        <div id="reading-passage">${currentPack.passage_text}</div>
+
+        <h4>Administration notes</h4>
+        <ul>${currentPack.administration_notes.map(n => `<li>${n}</li>`).join('')}</ul>
+        <h4>Questions</h4>
+        ${questionsHtml}`;
+    }
+
+    async function analyze() {
+      if (!currentPack) {
+        await generatePack();
+      }
+      const questionResponses = Array.from(document.querySelectorAll('#generated-pack textarea')).map(el => ({
+        question_type: el.dataset.qtype,
+        question: el.dataset.question,
+        child_response: el.value
+      }));
+      const payload = {
+        learner_id: learner.id,
+        age: learner.age,
+        country: learner.country,
+        passage_title: currentPack.passage_title,
+        listening_retell: document.getElementById('listening-retell').value,
+        listening_notes: document.getElementById('listening-notes').value,
+        read_accuracy_notes: document.getElementById('accuracy-notes').value,
+        read_fluency_notes: document.getElementById('fluency-notes').value,
+        self_correction_notes: document.getElementById('self-correction-notes').value,
+        observed_errors: document.getElementById('observed-errors').value.split('\n').map(x => x.trim()).filter(Boolean),
+        question_responses: questionResponses,
+        written_response: document.getElementById('written-response').value,
+        parent_attention_notes: document.getElementById('attention-notes').value,
+        parent_frustration_notes: document.getElementById('frustration-notes').value,
+        parent_confidence_notes: document.getElementById('confidence-notes').value,
+        parent_extra_notes: document.getElementById('extra-notes').value
+      };
+      const res = await fetch('/api/language/reading-baseline/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const analysis = await res.json();
+      document.getElementById('analysis-output').textContent = JSON.stringify(analysis, null, 2);
+    }
+
+    function readPassage() {
+      const passageEl = document.getElementById('reading-passage');
+      const speedEl = document.getElementById('tts-speed');
+
+      if (!passageEl) return;
+
+      const text = passageEl.innerText.trim();
+      if (!text) return;
+
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = Number(speedEl?.value || 0.9);
+      utterance.pitch = 1;
+      utterance.volume = 1;
+
+      speechSynthesis.cancel();
+      speechSynthesis.speak(utterance);
+    }
+
+let currentUtterance = null;
+let isPaused = false;
+
+function readPassage() {
+  const passageEl = document.getElementById('reading-passage');
+  const speedEl = document.getElementById('tts-speed');
+  const pauseBtn = document.getElementById('pause-btn');
+
+  if (!passageEl) return;
+
+  const text = passageEl.innerText.trim();
+  if (!text) return;
+
+  speechSynthesis.cancel();
+  isPaused = false;
+
+  currentUtterance = new SpeechSynthesisUtterance(text);
+  currentUtterance.rate = Number(speedEl?.value || 0.9);
+  currentUtterance.pitch = 1;
+  currentUtterance.volume = 1;
+
+  currentUtterance.onend = () => {
+    isPaused = false;
+    if (pauseBtn) pauseBtn.textContent = '⏸ Pause';
+  };
+
+  speechSynthesis.speak(currentUtterance);
+
+  if (pauseBtn) pauseBtn.textContent = '⏸ Pause';
+}
+
+function togglePauseReading() {
+  const pauseBtn = document.getElementById('pause-btn');
+
+  if (speechSynthesis.speaking && !speechSynthesis.paused) {
+    speechSynthesis.pause();
+    isPaused = true;
+    if (pauseBtn) pauseBtn.textContent = '▶ Resume';
+    return;
+  }
+
+  if (speechSynthesis.paused) {
+    speechSynthesis.resume();
+    isPaused = false;
+    if (pauseBtn) pauseBtn.textContent = '⏸ Pause';
+  }
+}
+
+window.addEventListener('beforeunload', () => {
+  speechSynthesis.cancel();
+});
+
+    document.getElementById('generate-btn').addEventListener('click', generatePack);
+    document.getElementById('analyze-btn').addEventListener('click', analyze);
+    loadLearner();
+  </script>
+</body>
+</html>

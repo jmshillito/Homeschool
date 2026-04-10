@@ -1,0 +1,11 @@
+OLD:   ~/projects/WebsiteMonitor/Homeschool/run-app.sh
+
+lsof -i :8000
+kill <PID>
+
+
+python3 baseline_api_check.py YOUR_LEARNER_ID --base-url http://127.0.0.1:8000
+
+python3 baseline_api_check.py 7b6b1bc7-08c5-42fa-85b1-3f3eba5cdd94 --base-url http://127.0.0.1:8000
+
+NEW

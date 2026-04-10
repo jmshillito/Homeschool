@@ -1,0 +1,3 @@
+interface:
+  display_name: "Homeschool Learning Agent"
+  short_description: "Build baselines, goals, prompts, and a web-ready homeschool progress model"

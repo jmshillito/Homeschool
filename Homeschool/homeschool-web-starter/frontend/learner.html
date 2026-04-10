@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Learner Hub</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 1100px; margin: 0 auto; padding: 24px; line-height: 1.4; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; margin: 16px 0; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+    .tile { border: 1px solid #ccc; border-radius: 12px; padding: 16px; text-decoration: none; color: #111; background: #fafafa; display:block; }
+    .tile.disabled { color: #666; background: #f5f5f5; }
+    .muted { color: #666; }
+    .toolbar { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+    select, input, button { padding:8px; }
+    .tag-wrap { min-height: 32px; }
+    .tag { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #ccc; border-radius: 999px; padding: 6px 10px; margin: 4px; }
+    .tag button { border:none; background:transparent; cursor:pointer; font-weight:bold; padding:0; margin:0; }
+  </style>
+</head>
+<body>
+  <p><a href="/">← Back to learners</a></p>
+  <h1 id="title">Learner hub</h1>
+  <div class="card" id="profile-card">Loading learner profile...</div>
+
+  <div class="card">
+    <h2>Preferred learning vehicles</h2>
+    <p class="muted">Start blank and add the subjects, interests, and practical routes that help this learner engage best. These vehicles will later influence Language, Maths, Science, and weekly prompts.</p>
+
+    <div class="toolbar">
+      <select id="vehicle-select">
+        <option value="">Choose a vehicle...</option>
+        <option>Art</option>
+        <option>IT</option>
+        <option>Geography</option>
+        <option>History</option>
+        <option>Music</option>
+        <option>Nature</option>
+        <option>Cooking</option>
+        <option>Building</option>
+        <option>Storytelling</option>
+        <option>Games</option>
+        <option>Sport</option>
+        <option>Drama</option>
+      </select>
+      <button id="add-vehicle-btn" type="button">Add</button>
+    </div>
+
+    <div class="toolbar">
+      <input id="custom-vehicle-input" placeholder="Add custom vehicle" />
+      <button id="add-custom-vehicle-btn" type="button">Add custom</button>
+    </div>
+
+    <div id="vehicle-tags" class="tag-wrap"></div>
+  </div>
+
+  <div class="card">
+    <h2>Subjects and pathways</h2>
+    <div class="grid">
+      <a class="tile" id="language-link" href="#">
+        <h3>Language</h3>
+        <p>Open diagnostics, baseline checks, and reading analysis.</p>
+      </a>
+      <div class="tile disabled">
+        <h3>Maths</h3>
+        <p>Reserved for number sense, operations, word problems, and later diagnostic flows.</p>
+      </div>
+      <div class="tile disabled">
+        <h3>Science</h3>
+        <p>Reserved for observation, prediction, explanation, and inquiry habits.</p>
+      </div>
+      <div class="tile disabled">
+        <h3>Cross-curricular vehicles</h3>
+        <p>Art, IT, Geography, History, Music, and project work will sit here later.</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const learnerId = params.get('id');
+    let learner = null;
+
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function renderProfile() {
+      document.getElementById('title').textContent = `${learner.display_name} · Learner hub`;
+      const vehicles = learner.preferred_vehicles || [];
+      document.getElementById('profile-card').innerHTML = `
+        <strong>ID:</strong> ${escapeHtml(learner.id)}<br>
+        <strong>Name:</strong> ${escapeHtml(learner.display_name)}<br>
+        <strong>Age:</strong> ${escapeHtml(learner.age)}<br>
+        <strong>Country:</strong> ${escapeHtml(learner.country)}<br>
+        <strong>Preferred vehicles:</strong> ${vehicles.length ? vehicles.map(escapeHtml).join(', ') : '<span class="muted">None selected yet</span>'}`;
+      document.getElementById('language-link').href = `/language.html?id=${learner.id}`;
+    }
+
+    function renderVehicles() {
+      const container = document.getElementById('vehicle-tags');
+      const vehicles = learner.preferred_vehicles || [];
+      if (!vehicles.length) {
+        container.innerHTML = '<p class="muted">No preferred vehicles selected yet.</p>';
+        return;
+      }
+      container.innerHTML = vehicles.map(vehicle => `
+        <span class="tag">
+          ${escapeHtml(vehicle)}
+          <button type="button" data-remove="${escapeHtml(vehicle)}" aria-label="Remove ${escapeHtml(vehicle)}">×</button>
+        </span>`).join('');
+      container.querySelectorAll('button[data-remove]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          await removeVehicle(btn.getAttribute('data-remove'));
+        });
+      });
+    }
+
+    async function saveVehicles() {
+      const res = await fetch(`/api/learners/${learnerId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ preferred_vehicles: learner.preferred_vehicles || [] })
+      });
+      learner = await res.json();
+      renderProfile();
+      renderVehicles();
+    }
+
+    async function addVehicle(value) {
+      const clean = value.trim();
+      if (!clean) return;
+      learner.preferred_vehicles = learner.preferred_vehicles || [];
+      if (!learner.preferred_vehicles.includes(clean)) {
+        learner.preferred_vehicles.push(clean);
+        await saveVehicles();
+      }
+    }
+
+    async function removeVehicle(value) {
+      learner.preferred_vehicles = (learner.preferred_vehicles || []).filter(v => v !== value);
+      await saveVehicles();
+    }
+
+    async function loadLearner() {
+      const res = await fetch(`/api/learners/${learnerId}`);
+      if (!res.ok) {
+        document.getElementById('profile-card').innerHTML = 'Learner not found.';
+        return;
+      }
+      learner = await res.json();
+      renderProfile();
+      renderVehicles();
+    }
+
+    document.getElementById('add-vehicle-btn').addEventListener('click', async () => {
+      const select = document.getElementById('vehicle-select');
+      await addVehicle(select.value);
+      select.value = '';
+    });
+
+    document.getElementById('add-custom-vehicle-btn').addEventListener('click', async () => {
+      const input = document.getElementById('custom-vehicle-input');
+      await addVehicle(input.value);
+      input.value = '';
+    });
+
+    loadLearner();
+  </script>
+</body>
+</html>
